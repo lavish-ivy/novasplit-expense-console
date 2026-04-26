@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b0f12">
+    <title>NovaSplit Expense Console</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script defer src="ledger.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <div class="ambient-grid" aria-hidden="true"></div>
+    <div class="app-shell">
+      <aside class="side-rail" aria-label="Workspace">
+        <a class="brand" href="#top" aria-label="NovaSplit home">
+          <span class="brand-mark">NS</span>
+          <span>
+            <strong>NovaSplit</strong>
+            <small>Expense console</small>
+          </span>
+        </a>
+
+        <section class="rail-section">
+          <div class="section-kicker">Groups</div>
+          <nav class="group-list" id="groupList" aria-label="Expense groups"></nav>
+        </section>
+
+        <section class="rail-section compact-tools">
+          <button class="ghost-button" id="exportButton" type="button">
+            <i data-lucide="download"></i>
+            <span>Export</span>
+          </button>
+          <button class="ghost-button" id="resetButton" type="button">
+            <i data-lucide="rotate-ccw"></i>
+            <span>Reset demo</span>
+          </button>
+        </section>
+      </aside>
+
+      <main class="workspace" id="top">
+        <header class="hero-band">
+          <div class="hero-copy">
+            <p class="eyebrow">Shared money, settled cleanly</p>
+            <h1>Expense command center for trips, homes, teams, and everything in between.</h1>
+            <p class="hero-subtitle">
+              Track split bills, optimize settlements, and see who owes what without spreadsheet chaos.
+            </p>
+          </div>
+          <div class="hero-actions" aria-label="Primary actions">
+            <button class="primary-button" id="focusExpenseButton" type="button">
+              <i data-lucide="plus"></i>
+              <span>Add expense</span>
+            </button>
+            <button class="secondary-button" id="focusMemberButton" type="button">
+              <i data-lucide="user-plus"></i>
+              <span>Add person</span>
+            </button>
+          </div>
+        </header>
+
+        <section class="metric-grid" aria-label="Balance summary">
+          <article class="metric-panel">
+            <span class="metric-icon positive"><i data-lucide="arrow-down-left"></i></span>
+            <span class="metric-label">You are owed</span>
+            <strong id="owedMetric">$0</strong>
+          </article>
+          <article class="metric-panel">
+            <span class="metric-icon negative"><i data-lucide="arrow-up-right"></i></span>
+            <span class="metric-label">You owe</span>
+            <strong id="oweMetric">$0</strong>
+          </article>
+          <article class="metric-panel">
+            <span class="metric-icon neutral"><i data-lucide="activity"></i></span>
+            <span class="metric-label">Net flow</span>
+            <strong id="netMetric">$0</strong>
+          </article>
+          <article class="metric-panel">
+            <span class="metric-icon warm"><i data-lucide="receipt-text"></i></span>
+            <span class="metric-label">Expenses</span>
+            <strong id="countMetric">0</strong>
+          </article>
+        </section>
+
+        <section class="constellation-panel" aria-label="Balance map">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker">Live balance map</p>
+              <h2>Who is floating the orbit</h2>
+            </div>
+            <div class="range-pill" id="activeScopeLabel">All groups</div>
+          </div>
+          <canvas id="balanceCanvas" width="1280" height="520" aria-label="Animated balance visualization"></canvas>
+        </section>
+
+        <div class="content-grid">
+          <section class="activity-panel" aria-labelledby="activityTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Ledger</p>
+                <h2 id="activityTitle">Activity stream</h2>
+              </div>
+              <label class="search-box">
+                <i data-lucide="search"></i>
+                <input id="searchInput" type="search" placeholder="Search expenses">
+              </label>
+            </div>
+            <div class="expense-list" id="expenseList"></div>
+          </section>
+
+          <aside class="right-stack">
+            <section class="console-panel" aria-labelledby="expenseFormTitle">
+              <div class="panel-heading tight">
+                <div>
+                  <p class="section-kicker">Console</p>
+                  <h2 id="expenseFormTitle">Add expense</h2>
+                </div>
+              </div>
+              <form id="expenseForm" class="stack-form">
+                <label>
+                  <span>Title</span>
+                  <input name="title" autocomplete="off" required placeholder="Dinner, hotel, tickets">
+                </label>
+                <div class="form-row">
+                  <label>
+                    <span>Amount</span>
+                    <input name="amount" inputmode="decimal" type="number" min="0.01" step="0.01" required placeholder="0.00">
+                  </label>
+                  <label>
+                    <span>Currency</span>
+                    <select name="currency" id="currencySelect">
+                      <option value="USD">USD</option>
+                      <option value="INR">INR</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="AED">AED</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    <span>Group</span>
+                    <select name="groupId" id="expenseGroupSelect"></select>
+                  </label>
+                  <label>
+                    <span>Paid by</span>
+                    <select name="payerId" id="payerSelect"></select>
+                  </label>
+                </div>
+                <label>
+                  <span>Category</span>
+                  <select name="category">
+                    <option value="food">Food</option>
+                    <option value="stay">Stay</option>
+                    <option value="travel">Travel</option>
+                    <option value="home">Home</option>
+                    <option value="work">Work</option>
+                    <option value="fun">Fun</option>
+                    <option value="settlement">Settlement</option>
+                  </select>
+                </label>
+                <fieldset class="segmented-control" aria-label="Split method">
+                  <label>
+                    <input type="radio" name="splitType" value="equal" checked>
+                    <span>Equal</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="splitType" value="custom">
+                    <span>Custom</span>
+                  </label>
+                </fieldset>
+                <fieldset class="participant-box">
+                  <legend>Split between</legend>
+                  <div id="participantList" class="participant-list"></div>
+                </fieldset>
+                <div class="custom-splits" id="customSplits" hidden></div>
+                <label>
+                  <span>Note</span>
+                  <textarea name="note" rows="3" placeholder="Optional context"></textarea>
+                </label>
+                <button class="primary-button full-width" type="submit">
+                  <i data-lucide="sparkles"></i>
+                  <span>Save expense</span>
+                </button>
+                <p class="form-message" id="expenseMessage" role="status"></p>
+              </form>
+            </section>
+
+            <section class="settlement-panel" aria-labelledby="settlementTitle">
+              <div class="panel-heading tight">
+                <div>
+                  <p class="section-kicker">Settle</p>
+                  <h2 id="settlementTitle">Optimized transfers</h2>
+                </div>
+                <button class="icon-button" id="applySettlementButton" type="button" title="Apply next settlement">
+                  <i data-lucide="check-check"></i>
+                </button>
+              </div>
+              <div class="settlement-list" id="settlementList"></div>
+            </section>
+
+            <section class="people-panel" aria-labelledby="peopleTitle">
+              <div class="panel-heading tight">
+                <div>
+                  <p class="section-kicker">Roster</p>
+                  <h2 id="peopleTitle">People</h2>
+                </div>
+              </div>
+              <div class="person-list" id="personList"></div>
+              <form id="memberForm" class="inline-form">
+                <label class="sr-only" for="memberName">Person name</label>
+                <input id="memberName" name="name" autocomplete="off" required placeholder="Add a person">
+                <button class="icon-button" type="submit" title="Add person">
+                  <i data-lucide="plus"></i>
+                </button>
+              </form>
+            </section>
+          </aside>
+        </div>
+
+        <section class="analytics-grid" aria-label="Analytics">
+          <article class="analytics-panel">
+            <div class="panel-heading tight">
+              <div>
+                <p class="section-kicker">Signals</p>
+                <h2>Category pulse</h2>
+              </div>
+            </div>
+            <div class="category-bars" id="categoryBars"></div>
+          </article>
+          <article class="analytics-panel">
+            <div class="panel-heading tight">
+              <div>
+                <p class="section-kicker">Create</p>
+                <h2>New group</h2>
+              </div>
+            </div>
+            <form id="groupForm" class="stack-form small">
+              <label>
+                <span>Group name</span>
+                <input name="name" autocomplete="off" required placeholder="Weekend in Seoul">
+              </label>
+              <label>
+                <span>Budget</span>
+                <input name="budget" type="number" min="0" step="1" placeholder="2500">
+              </label>
+              <fieldset class="participant-box">
+                <legend>Members</legend>
+                <div id="groupMemberList" class="participant-list compact"></div>
+              </fieldset>
+              <button class="secondary-button full-width" type="submit">
+                <i data-lucide="folder-plus"></i>
+                <span>Create group</span>
+              </button>
+            </form>
+          </article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

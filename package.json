@@ -1,0 +1,19 @@
+{
+  "name": "novasplit-expense-console",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A futuristic local-first expense splitting app for groups, trips, homes, and teams.",
+  "scripts": {
+    "check": "node --check ledger.js && node --check app.js && node --check tests/ledger.test.js",
+    "test": "node tests/ledger.test.js"
+  },
+  "keywords": [
+    "expense",
+    "splitwise",
+    "settlements",
+    "local-first",
+    "github-pages"
+  ],
+  "author": "",
+  "license": "MIT"
+}

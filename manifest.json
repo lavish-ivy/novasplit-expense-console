@@ -1,0 +1,9 @@
+{
+  "name": "NovaSplit Expense Console",
+  "short_name": "NovaSplit",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#080a0b",
+  "theme_color": "#0b0f12",
+  "icons": []
+}
