@@ -1,10 +1,11 @@
 # NovaSplit Expense Console
 
-A futuristic, local-first expense splitting app built as a static SPA. It tracks groups, people, shared expenses, custom splits, optimized settlements, balance visualizations, category totals, and JSON export.
+A futuristic, local-first expense splitting app built as a static SPA. It tracks groups, people, shared expenses in INR, custom splits, optimized settlements, balance visualizations, category totals, and JSON export.
 
 ## Features
 
 - Multi-group expense tracking
+- Rupee-first money display across the app
 - Equal and custom splits
 - Optimized settlement suggestions
 - One-click settlement recording

@@ -65,17 +65,17 @@
           <article class="metric-panel">
             <span class="metric-icon positive"><i data-lucide="arrow-down-left"></i></span>
             <span class="metric-label">You are owed</span>
-            <strong id="owedMetric">$0</strong>
+            <strong id="owedMetric">Rs 0</strong>
           </article>
           <article class="metric-panel">
             <span class="metric-icon negative"><i data-lucide="arrow-up-right"></i></span>
             <span class="metric-label">You owe</span>
-            <strong id="oweMetric">$0</strong>
+            <strong id="oweMetric">Rs 0</strong>
           </article>
           <article class="metric-panel">
             <span class="metric-icon neutral"><i data-lucide="activity"></i></span>
             <span class="metric-label">Net flow</span>
-            <strong id="netMetric">$0</strong>
+            <strong id="netMetric">Rs 0</strong>
           </article>
           <article class="metric-panel">
             <span class="metric-icon warm"><i data-lucide="receipt-text"></i></span>
@@ -130,12 +130,8 @@
                   </label>
                   <label>
                     <span>Currency</span>
-                    <select name="currency" id="currencySelect">
-                      <option value="USD">USD</option>
-                      <option value="INR">INR</option>
-                      <option value="EUR">EUR</option>
-                      <option value="GBP">GBP</option>
-                      <option value="AED">AED</option>
+                    <select name="currency" id="currencySelect" disabled>
+                      <option value="INR" selected>INR only</option>
                     </select>
                   </label>
                 </div>

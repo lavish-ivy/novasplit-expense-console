@@ -1,11 +1,11 @@
 (function appFactory() {
   "use strict";
 
-  const storageKey = "novasplit-state-v1";
+  const storageKey = "novasplit-state-v2";
   const palette = ["#45e0bf", "#f7c65a", "#ff6f61", "#a895ff", "#9fc2ff", "#b3ea6b"];
 
   const defaultState = {
-    currency: "USD",
+    currency: "INR",
     profileMemberId: "m-ava",
     activeGroupId: "all",
     members: [
@@ -15,16 +15,16 @@
       { id: "m-nia", name: "Nia", avatar: "NI", color: "#a895ff" }
     ],
     groups: [
-      { id: "g-orbit", name: "Orbit House", code: "OH", budget: 3200, memberIds: ["m-ava", "m-rio", "m-zed", "m-nia"] },
-      { id: "g-kyoto", name: "Kyoto Sprint", code: "KS", budget: 5400, memberIds: ["m-ava", "m-rio", "m-nia"] },
-      { id: "g-lab", name: "Design Lab", code: "DL", budget: 1800, memberIds: ["m-ava", "m-zed"] }
+      { id: "g-orbit", name: "Orbit House", code: "OH", budget: 265000, memberIds: ["m-ava", "m-rio", "m-zed", "m-nia"] },
+      { id: "g-kyoto", name: "Kyoto Sprint", code: "KS", budget: 448000, memberIds: ["m-ava", "m-rio", "m-nia"] },
+      { id: "g-lab", name: "Design Lab", code: "DL", budget: 149000, memberIds: ["m-ava", "m-zed"] }
     ],
     expenses: [
       {
         id: "e-1",
         title: "Launch dinner",
-        amount: 286.4,
-        currency: "USD",
+        amount: 23800,
+        currency: "INR",
         category: "food",
         groupId: "g-orbit",
         payerId: "m-ava",
@@ -36,21 +36,21 @@
       {
         id: "e-2",
         title: "Capsule hotel block",
-        amount: 1180,
-        currency: "USD",
+        amount: 98000,
+        currency: "INR",
         category: "stay",
         groupId: "g-kyoto",
         payerId: "m-rio",
         paidAt: "2026-04-20",
         participants: ["m-ava", "m-rio", "m-nia"],
-        split: { type: "custom", values: { "m-ava": 420, "m-rio": 340, "m-nia": 420 } },
+        split: { type: "custom", values: { "m-ava": 35000, "m-rio": 28000, "m-nia": 35000 } },
         note: "Nia and Ava took the larger pods."
       },
       {
         id: "e-3",
         title: "Prototype materials",
-        amount: 640,
-        currency: "USD",
+        amount: 53200,
+        currency: "INR",
         category: "work",
         groupId: "g-lab",
         payerId: "m-zed",
@@ -62,8 +62,8 @@
       {
         id: "e-4",
         title: "Airport transfer",
-        amount: 168,
-        currency: "USD",
+        amount: 13950,
+        currency: "INR",
         category: "travel",
         groupId: "g-kyoto",
         payerId: "m-ava",
@@ -75,8 +75,8 @@
       {
         id: "e-5",
         title: "Smart pantry",
-        amount: 214.8,
-        currency: "USD",
+        amount: 17850,
+        currency: "INR",
         category: "home",
         groupId: "g-orbit",
         payerId: "m-nia",
@@ -168,13 +168,22 @@
     try {
       const saved = localStorage.getItem(storageKey);
       if (!saved) {
-        return structuredClone(defaultState);
+        return normalizeRupeeState(structuredClone(defaultState));
       }
-      return { ...structuredClone(defaultState), ...JSON.parse(saved) };
+      return normalizeRupeeState({ ...structuredClone(defaultState), ...JSON.parse(saved) });
     } catch (error) {
       console.warn("Unable to load saved state", error);
-      return structuredClone(defaultState);
+      return normalizeRupeeState(structuredClone(defaultState));
     }
+  }
+
+  function normalizeRupeeState(nextState) {
+    nextState.currency = "INR";
+    nextState.expenses = (nextState.expenses || []).map((expense) => ({
+      ...expense,
+      currency: "INR"
+    }));
+    return nextState;
   }
 
   function saveState() {
@@ -495,7 +504,7 @@
       id: createId("e"),
       title: String(data.get("title") || "").trim(),
       amount,
-      currency: state.currency,
+      currency: "INR",
       category: data.get("category"),
       groupId: data.get("groupId"),
       payerId: data.get("payerId"),
@@ -506,7 +515,7 @@
     });
 
     form.reset();
-    elements.currencySelect.value = state.currency;
+    elements.currencySelect.value = "INR";
     saveState();
     syncGroupMemberControls();
     setMessage("Expense saved.");
@@ -576,7 +585,7 @@
       id: createId("e"),
       title: `Settlement to ${settlement.toName}`,
       amount: settlement.amount,
-      currency: state.currency,
+      currency: "INR",
       category: "settlement",
       groupId,
       payerId: settlement.fromId,
@@ -748,12 +757,14 @@
     }, 260);
   }
 
-  function formatMoney(value, currency = state.currency) {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
+  function formatMoney(value) {
+    const amount = Number(value || 0);
+    const hasPaise = Math.abs(amount % 1) > 0.009;
+    const formatted = new Intl.NumberFormat("en-IN", {
+      minimumFractionDigits: hasPaise ? 2 : 0,
       maximumFractionDigits: 2
-    }).format(Number(value || 0));
+    }).format(amount);
+    return `Rs ${formatted}`;
   }
 
   function formatDate(value) {
