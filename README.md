@@ -6,6 +6,7 @@ A futuristic, local-first expense splitting app built as a static SPA. It tracks
 
 - Multi-group expense tracking
 - Rupee-first money display across the app
+- Device accounts with separate saved ledgers
 - Equal and custom splits
 - Optimized settlement suggestions
 - One-click settlement recording
@@ -13,6 +14,12 @@ A futuristic, local-first expense splitting app built as a static SPA. It tracks
 - Exportable JSON ledger
 - Responsive dashboard UI
 - No build step and no runtime backend
+
+## Accounts
+
+NovaSplit supports account creation and sign-in on the static GitHub Pages app. Ledgers are saved per account in the browser with a hashed password check, so multiple people can keep separate data on the same device.
+
+This is device-local persistence, not cloud sync. To save data across devices, connect a backend such as Supabase or Firebase and map the existing account and ledger storage layer to that provider.
 
 ## Run Locally
 

@@ -2,6 +2,9 @@
   "use strict";
 
   const storageKey = "novasplit-state-v2";
+  const accountStoreKey = "novasplit-accounts-v1";
+  const sessionKey = "novasplit-session-v1";
+  const hashIterations = 120000;
   const palette = ["#45e0bf", "#f7c65a", "#ff6f61", "#a895ff", "#9fc2ff", "#b3ea6b"];
 
   const defaultState = {
@@ -88,18 +91,25 @@
     ]
   };
 
-  let state = loadState();
+  let accountStore = loadAccountStore();
+  let currentUser = loadSessionUser();
+  let state = currentUser ? loadUserState(currentUser.id) : loadState();
   let animationFrame = 0;
   let canvasPhase = 0;
 
   const elements = {};
 
-  document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("DOMContentLoaded", () => {
+    init();
+  });
 
   function init() {
     [
+      "accountCard",
       "activeScopeLabel",
       "applySettlementButton",
+      "authGate",
+      "authMessage",
       "balanceCanvas",
       "categoryBars",
       "countMetric",
@@ -123,7 +133,9 @@
       "payerSelect",
       "personList",
       "resetButton",
-      "searchInput"
+      "searchInput",
+      "signInForm",
+      "signUpForm"
     ].forEach((id) => {
       elements[id] = document.getElementById(id);
     });
@@ -137,6 +149,11 @@
     elements.expenseForm.addEventListener("submit", handleExpenseSubmit);
     elements.memberForm.addEventListener("submit", handleMemberSubmit);
     elements.groupForm.addEventListener("submit", handleGroupSubmit);
+    elements.signInForm.addEventListener("submit", handleSignIn);
+    elements.signUpForm.addEventListener("submit", handleSignUp);
+    document.querySelectorAll('input[name="authMode"]').forEach((input) => {
+      input.addEventListener("change", syncAuthMode);
+    });
     elements.expenseGroupSelect.addEventListener("change", syncGroupMemberControls);
     elements.currencySelect.addEventListener("change", (event) => {
       state.currency = event.target.value;
@@ -164,6 +181,42 @@
     });
   }
 
+  function loadAccountStore() {
+    try {
+      const saved = localStorage.getItem(accountStoreKey);
+      if (!saved) {
+        return { version: 1, users: [], ledgers: {} };
+      }
+      const parsed = JSON.parse(saved);
+      return {
+        version: 1,
+        users: Array.isArray(parsed.users) ? parsed.users : [],
+        ledgers: parsed.ledgers && typeof parsed.ledgers === "object" ? parsed.ledgers : {}
+      };
+    } catch (error) {
+      console.warn("Unable to load account store", error);
+      return { version: 1, users: [], ledgers: {} };
+    }
+  }
+
+  function saveAccountStore() {
+    localStorage.setItem(accountStoreKey, JSON.stringify(accountStore));
+  }
+
+  function loadSessionUser() {
+    const userId = localStorage.getItem(sessionKey);
+    const user = accountStore.users.find((item) => item.id === userId);
+    return user ? publicUser(user) : null;
+  }
+
+  function loadUserState(userId) {
+    const saved = accountStore.ledgers[userId];
+    if (!saved) {
+      return loadState();
+    }
+    return normalizeRupeeState({ ...structuredClone(defaultState), ...structuredClone(saved) });
+  }
+
   function loadState() {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -187,10 +240,19 @@
   }
 
   function saveState() {
+    state = normalizeRupeeState(state);
+    if (currentUser) {
+      accountStore.ledgers[currentUser.id] = structuredClone(state);
+      saveAccountStore();
+      renderSaveStatus();
+      return;
+    }
     localStorage.setItem(storageKey, JSON.stringify(state));
   }
 
   function render() {
+    renderAuthState();
+    renderAccount();
     elements.currencySelect.value = state.currency;
     renderGroups();
     renderSelectors();
@@ -201,6 +263,77 @@
     renderPeople();
     renderCategoryBars();
     refreshIcons();
+  }
+
+  function renderAuthState() {
+    document.body.classList.toggle("signed-out", !currentUser);
+    elements.authGate.hidden = Boolean(currentUser);
+    syncAuthMode();
+  }
+
+  function renderAccount() {
+    if (!currentUser) {
+      elements.accountCard.innerHTML = `
+        <div class="section-kicker">Account</div>
+        <div class="account-card">
+          <button class="secondary-button full-width" type="button" data-open-auth>
+            <i data-lucide="log-in"></i>
+            <span>Sign in</span>
+          </button>
+        </div>
+      `;
+      elements.accountCard.querySelector("[data-open-auth]")?.addEventListener("click", () => {
+        elements.authGate.hidden = false;
+        elements.signInForm.elements.namedItem("email").focus();
+      });
+      return;
+    }
+
+    elements.accountCard.innerHTML = `
+      <div class="section-kicker">Account</div>
+      <div class="account-card">
+        <div class="account-row">
+          <span class="avatar" style="--avatar-color: ${escapeHtml(currentUser.color || "#45e0bf")}">${escapeHtml(currentUser.avatar || initials(currentUser.name))}</span>
+          <span>
+            <strong>${escapeHtml(currentUser.name)}</strong>
+            <small>${escapeHtml(currentUser.email)}</small>
+          </span>
+        </div>
+        <div class="account-actions">
+          <button class="ghost-button" type="button" data-save-now>
+            <i data-lucide="save"></i>
+            <span id="saveStatus">Saved</span>
+          </button>
+          <button class="icon-button" type="button" title="Sign out" data-sign-out>
+            <i data-lucide="log-out"></i>
+          </button>
+        </div>
+      </div>
+    `;
+    elements.accountCard.querySelector("[data-save-now]")?.addEventListener("click", () => {
+      saveState();
+      setSaveStatus("Saved now");
+    });
+    elements.accountCard.querySelector("[data-sign-out]")?.addEventListener("click", handleSignOut);
+  }
+
+  function renderSaveStatus() {
+    setSaveStatus("Saved");
+  }
+
+  function setSaveStatus(message) {
+    const saveStatus = document.getElementById("saveStatus");
+    if (saveStatus) {
+      saveStatus.textContent = message;
+    }
+  }
+
+  function syncAuthMode() {
+    const mode = document.querySelector('input[name="authMode"]:checked')?.value || "signin";
+    elements.signInForm.hidden = mode !== "signin";
+    elements.signUpForm.hidden = mode !== "signup";
+    document.getElementById("authTitle").textContent = mode === "signin" ? "Sign in to continue" : "Create account";
+    elements.authMessage.textContent = "";
   }
 
   function renderGroups() {
@@ -466,8 +599,90 @@
       .join("");
   }
 
+  async function handleSignUp(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const name = String(data.get("name") || "").trim();
+    const email = normalizeEmail(data.get("email"));
+    const password = String(data.get("password") || "");
+
+    if (!name || !email || password.length < 6) {
+      setAuthMessage("Use a name, email, and password with at least 6 characters.");
+      return;
+    }
+
+    if (findUserByEmail(email)) {
+      setAuthMessage("That email already has an account.");
+      return;
+    }
+
+    setAuthMessage("Creating account...");
+    const salt = randomHex(16);
+    const passwordHash = await hashPassword(password, salt);
+    const user = {
+      id: createId("u"),
+      name,
+      email,
+      avatar: initials(name),
+      color: palette[accountStore.users.length % palette.length],
+      salt,
+      passwordHash,
+      createdAt: new Date().toISOString()
+    };
+
+    accountStore.users.push(user);
+    currentUser = publicUser(user);
+    state = hasLegacyState() ? personalizeState(state, currentUser) : createStarterState(currentUser);
+    accountStore.ledgers[user.id] = structuredClone(state);
+    localStorage.setItem(sessionKey, user.id);
+    saveAccountStore();
+    form.reset();
+    elements.authMessage.textContent = "";
+    render();
+  }
+
+  async function handleSignIn(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const email = normalizeEmail(data.get("email"));
+    const password = String(data.get("password") || "");
+    const user = findUserByEmail(email);
+
+    if (!user) {
+      setAuthMessage("No account found for that email.");
+      return;
+    }
+
+    setAuthMessage("Checking account...");
+    const passwordHash = await hashPassword(password, user.salt);
+    if (passwordHash !== user.passwordHash) {
+      setAuthMessage("Password did not match.");
+      return;
+    }
+
+    currentUser = publicUser(user);
+    state = loadUserState(user.id);
+    localStorage.setItem(sessionKey, user.id);
+    form.reset();
+    elements.authMessage.textContent = "";
+    render();
+  }
+
+  function handleSignOut() {
+    saveState();
+    localStorage.removeItem(sessionKey);
+    currentUser = null;
+    state = loadState();
+    render();
+  }
+
   function handleExpenseSubmit(event) {
     event.preventDefault();
+    if (!requireAccount()) {
+      return;
+    }
     const form = event.currentTarget;
     const data = new FormData(form);
     const amount = Ledger.roundMoney(data.get("amount"));
@@ -524,6 +739,9 @@
 
   function handleMemberSubmit(event) {
     event.preventDefault();
+    if (!requireAccount()) {
+      return;
+    }
     const form = event.currentTarget;
     const data = new FormData(form);
     const name = String(data.get("name") || "").trim();
@@ -549,6 +767,9 @@
 
   function handleGroupSubmit(event) {
     event.preventDefault();
+    if (!requireAccount()) {
+      return;
+    }
     const form = event.currentTarget;
     const data = new FormData(form);
     const name = String(data.get("name") || "").trim();
@@ -573,6 +794,9 @@
   }
 
   function applyNextSettlement() {
+    if (!requireAccount()) {
+      return;
+    }
     const [settlement] = currentSettlements();
     if (!settlement) {
       return;
@@ -599,6 +823,9 @@
   }
 
   function exportState() {
+    if (!requireAccount()) {
+      return;
+    }
     const payload = JSON.stringify(state, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -612,7 +839,10 @@
   }
 
   function resetDemo() {
-    state = structuredClone(defaultState);
+    if (!requireAccount()) {
+      return;
+    }
+    state = personalizeState(structuredClone(defaultState), currentUser);
     saveState();
     render();
   }
@@ -732,6 +962,139 @@
     return groupById(state.activeGroupId)?.name || "All groups";
   }
 
+  function requireAccount() {
+    if (currentUser) {
+      return true;
+    }
+    elements.authGate.hidden = false;
+    setAuthMessage("Create an account or sign in first.");
+    return false;
+  }
+
+  function publicUser(user) {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar || initials(user.name),
+      color: user.color || "#45e0bf"
+    };
+  }
+
+  function findUserByEmail(email) {
+    return accountStore.users.find((user) => user.email === email);
+  }
+
+  function personalizeState(nextState, user) {
+    const normalized = normalizeRupeeState(structuredClone(nextState || defaultState));
+    const profileId = normalized.profileMemberId || normalized.members[0]?.id;
+    const profile = normalized.members.find((member) => member.id === profileId);
+    if (profile && user) {
+      profile.name = user.name;
+      profile.avatar = user.avatar || initials(user.name);
+      profile.color = user.color || profile.color;
+    }
+    return normalized;
+  }
+
+  function createStarterState(user) {
+    const memberId = "m-owner";
+    const groupId = "g-personal";
+    return normalizeRupeeState({
+      currency: "INR",
+      profileMemberId: memberId,
+      activeGroupId: "all",
+      members: [
+        {
+          id: memberId,
+          name: user.name,
+          avatar: user.avatar || initials(user.name),
+          color: user.color || "#45e0bf"
+        }
+      ],
+      groups: [
+        {
+          id: groupId,
+          name: "My group",
+          code: "MG",
+          budget: 0,
+          memberIds: [memberId]
+        }
+      ],
+      expenses: []
+    });
+  }
+
+  function hasLegacyState() {
+    return Boolean(localStorage.getItem(storageKey));
+  }
+
+  function normalizeEmail(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  async function hashPassword(password, saltHex) {
+    if (window.crypto?.subtle && window.TextEncoder) {
+      const encoder = new TextEncoder();
+      const key = await window.crypto.subtle.importKey(
+        "raw",
+        encoder.encode(password),
+        "PBKDF2",
+        false,
+        ["deriveBits"]
+      );
+      const bits = await window.crypto.subtle.deriveBits(
+        {
+          name: "PBKDF2",
+          salt: hexToBytes(saltHex),
+          iterations: hashIterations,
+          hash: "SHA-256"
+        },
+        key,
+        256
+      );
+      return bytesToHex(new Uint8Array(bits));
+    }
+    return fallbackHash(`${saltHex}:${password}`);
+  }
+
+  function randomHex(length) {
+    const bytes = new Uint8Array(length);
+    if (window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      bytes.forEach((_, index) => {
+        bytes[index] = Math.floor(Math.random() * 256);
+      });
+    }
+    return bytesToHex(bytes);
+  }
+
+  function hexToBytes(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+    }
+    return bytes;
+  }
+
+  function bytesToHex(bytes) {
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function fallbackHash(value) {
+    let hashA = 0xdeadbeef;
+    let hashB = 0x41c6ce57;
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index);
+      hashA = Math.imul(hashA ^ code, 2654435761);
+      hashB = Math.imul(hashB ^ code, 1597334677);
+    }
+    hashA = Math.imul(hashA ^ (hashA >>> 16), 2246822507) ^ Math.imul(hashB ^ (hashB >>> 13), 3266489909);
+    hashB = Math.imul(hashB ^ (hashB >>> 16), 2246822507) ^ Math.imul(hashA ^ (hashA >>> 13), 3266489909);
+    return `${(hashB >>> 0).toString(16).padStart(8, "0")}${(hashA >>> 0).toString(16).padStart(8, "0")}`;
+  }
+
   function checkedValues(form, name) {
     return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => input.value);
   }
@@ -747,6 +1110,10 @@
         elements.expenseMessage.textContent = "";
       }
     }, 2800);
+  }
+
+  function setAuthMessage(message) {
+    elements.authMessage.textContent = message;
   }
 
   function focusFirstField(form) {

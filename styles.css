@@ -253,6 +253,92 @@ legend {
   gap: 0.5rem;
 }
 
+.account-card {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.72rem;
+}
+
+.account-row {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.account-row strong,
+.account-row small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-row small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  margin-top: 0.12rem;
+}
+
+.account-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+}
+
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background:
+    linear-gradient(120deg, rgba(69, 224, 191, 0.12), transparent 42%),
+    rgba(8, 10, 11, 0.82);
+  backdrop-filter: blur(22px);
+}
+
+.auth-gate[hidden] {
+  display: none;
+}
+
+.auth-card {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 430px);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.auth-brand {
+  padding-bottom: 0.2rem;
+}
+
+.auth-copy h2 {
+  font-size: clamp(1.6rem, 5vw, 2.35rem);
+}
+
+.auth-form {
+  padding: 0;
+}
+
+.auth-tabs {
+  margin: 0;
+}
+
+body.signed-out .workspace,
+body.signed-out .side-rail {
+  filter: saturate(0.72);
+}
+
 .workspace {
   width: min(100%, 1560px);
   margin: 0 auto;
