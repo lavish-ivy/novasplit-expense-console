@@ -35,10 +35,19 @@
             <i data-lucide="download"></i>
             <span>Export</span>
           </button>
+          <button class="ghost-button" id="csvButton" type="button">
+            <i data-lucide="table"></i>
+            <span>CSV</span>
+          </button>
+          <button class="ghost-button" id="importButton" type="button">
+            <i data-lucide="upload"></i>
+            <span>Import</span>
+          </button>
           <button class="ghost-button" id="resetButton" type="button">
             <i data-lucide="rotate-ccw"></i>
             <span>Reset demo</span>
           </button>
+          <input class="sr-only" id="importFileInput" type="file" accept="application/json">
         </section>
       </aside>
 
@@ -109,6 +118,38 @@
                 <input id="searchInput" type="search" placeholder="Search expenses">
               </label>
             </div>
+            <div class="filter-grid" aria-label="Ledger filters">
+              <label>
+                <span>Category</span>
+                <select id="categoryFilter">
+                  <option value="all">All categories</option>
+                </select>
+              </label>
+              <label>
+                <span>Status</span>
+                <select id="statusFilter">
+                  <option value="all">All statuses</option>
+                  <option value="cleared">Cleared</option>
+                  <option value="pending">Pending</option>
+                  <option value="reimbursable">Reimbursable</option>
+                </select>
+              </label>
+              <label>
+                <span>Month</span>
+                <select id="monthFilter">
+                  <option value="all">All months</option>
+                </select>
+              </label>
+              <label>
+                <span>Sort</span>
+                <select id="sortSelect">
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="amount-desc">Highest</option>
+                  <option value="amount-asc">Lowest</option>
+                </select>
+              </label>
+            </div>
             <div class="expense-list" id="expenseList"></div>
           </section>
 
@@ -121,10 +162,21 @@
                 </div>
               </div>
               <form id="expenseForm" class="stack-form">
+                <input type="hidden" name="editingExpenseId" value="">
                 <label>
                   <span>Title</span>
                   <input name="title" autocomplete="off" required placeholder="Dinner, hotel, tickets">
                 </label>
+                <div class="form-row">
+                  <label>
+                    <span>Date</span>
+                    <input name="paidAt" type="date">
+                  </label>
+                  <label>
+                    <span>Merchant</span>
+                    <input name="merchant" autocomplete="off" placeholder="Cafe, airline, landlord">
+                  </label>
+                </div>
                 <div class="form-row">
                   <label>
                     <span>Amount</span>
@@ -134,6 +186,26 @@
                     <span>Currency</span>
                     <select name="currency" id="currencySelect" disabled>
                       <option value="INR" selected>INR only</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    <span>Status</span>
+                    <select name="status">
+                      <option value="cleared">Cleared</option>
+                      <option value="pending">Pending</option>
+                      <option value="reimbursable">Reimbursable</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Paid with</span>
+                    <select name="paymentMethod">
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="cash">Cash</option>
+                      <option value="bank">Bank transfer</option>
+                      <option value="wallet">Wallet</option>
                     </select>
                   </label>
                 </div>
@@ -156,8 +228,14 @@
                     <option value="home">Home</option>
                     <option value="work">Work</option>
                     <option value="fun">Fun</option>
+                    <option value="health">Health</option>
+                    <option value="shopping">Shopping</option>
                     <option value="settlement">Settlement</option>
                   </select>
+                </label>
+                <label>
+                  <span>Tags</span>
+                  <input name="tags" autocomplete="off" placeholder="urgent, client, non-veg">
                 </label>
                 <fieldset class="segmented-control" aria-label="Split method">
                   <label>
@@ -167,6 +245,14 @@
                   <label>
                     <input type="radio" name="splitType" value="custom">
                     <span>Custom</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="splitType" value="percent">
+                    <span>Percent</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="splitType" value="shares">
+                    <span>Shares</span>
                   </label>
                 </fieldset>
                 <fieldset class="participant-box">
@@ -178,10 +264,31 @@
                   <span>Note</span>
                   <textarea name="note" rows="3" placeholder="Optional context"></textarea>
                 </label>
-                <button class="primary-button full-width" type="submit">
-                  <i data-lucide="sparkles"></i>
-                  <span>Save expense</span>
-                </button>
+                <div class="form-row">
+                  <label>
+                    <span>Recurring</span>
+                    <select name="recurringInterval">
+                      <option value="none">No repeat</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Receipt</span>
+                    <input name="receipt" type="file" accept="image/*,application/pdf">
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <button class="primary-button full-width" type="submit">
+                    <i data-lucide="sparkles"></i>
+                    <span id="expenseSubmitLabel">Save expense</span>
+                  </button>
+                  <button class="secondary-button" id="cancelEditButton" type="button" hidden>
+                    <i data-lucide="x"></i>
+                    <span>Cancel</span>
+                  </button>
+                </div>
                 <p class="form-message" id="expenseMessage" role="status"></p>
               </form>
             </section>
@@ -192,9 +299,14 @@
                   <p class="section-kicker">Settle</p>
                   <h2 id="settlementTitle">Optimized transfers</h2>
                 </div>
-                <button class="icon-button" id="applySettlementButton" type="button" title="Apply next settlement">
-                  <i data-lucide="check-check"></i>
-                </button>
+                <div class="inline-actions">
+                  <button class="icon-button" id="shareSettlementButton" type="button" title="Share settlement plan">
+                    <i data-lucide="send"></i>
+                  </button>
+                  <button class="icon-button" id="applySettlementButton" type="button" title="Apply next settlement">
+                    <i data-lucide="check-check"></i>
+                  </button>
+                </div>
               </div>
               <div class="settlement-list" id="settlementList"></div>
             </section>
@@ -231,6 +343,36 @@
           <article class="analytics-panel">
             <div class="panel-heading tight">
               <div>
+                <p class="section-kicker">Budgets</p>
+                <h2>Group runway</h2>
+              </div>
+            </div>
+            <div class="budget-list" id="budgetList"></div>
+          </article>
+          <article class="analytics-panel">
+            <div class="panel-heading tight">
+              <div>
+                <p class="section-kicker">Forecast</p>
+                <h2>Recurring charges</h2>
+              </div>
+              <button class="icon-button" id="postRecurringButton" type="button" title="Post due recurring expenses">
+                <i data-lucide="repeat-2"></i>
+              </button>
+            </div>
+            <div class="recurring-list" id="recurringList"></div>
+          </article>
+          <article class="analytics-panel">
+            <div class="panel-heading tight">
+              <div>
+                <p class="section-kicker">Intelligence</p>
+                <h2>Expense insights</h2>
+              </div>
+            </div>
+            <div class="insight-grid" id="insightGrid"></div>
+          </article>
+          <article class="analytics-panel">
+            <div class="panel-heading tight">
+              <div>
                 <p class="section-kicker">Create</p>
                 <h2>New group</h2>
               </div>
@@ -251,6 +393,32 @@
               <button class="secondary-button full-width" type="submit">
                 <i data-lucide="folder-plus"></i>
                 <span>Create group</span>
+              </button>
+            </form>
+          </article>
+          <article class="analytics-panel">
+            <div class="panel-heading tight">
+              <div>
+                <p class="section-kicker">Control</p>
+                <h2>Active group</h2>
+              </div>
+            </div>
+            <form id="groupSettingsForm" class="stack-form small">
+              <label>
+                <span>Name</span>
+                <input name="name" autocomplete="off" placeholder="Select a group">
+              </label>
+              <label>
+                <span>Budget</span>
+                <input name="budget" type="number" min="0" step="1" placeholder="0">
+              </label>
+              <fieldset class="participant-box">
+                <legend>Members</legend>
+                <div id="activeGroupMemberList" class="participant-list compact"></div>
+              </fieldset>
+              <button class="secondary-button full-width" type="submit">
+                <i data-lucide="save"></i>
+                <span>Update group</span>
               </button>
             </form>
           </article>
@@ -288,7 +456,7 @@
           </label>
           <label>
             <span>Password</span>
-            <input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="••••••••">
+            <input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="********">
           </label>
           <button class="primary-button full-width" type="submit">
             <i data-lucide="log-in"></i>

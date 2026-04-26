@@ -8,10 +8,17 @@ A futuristic, local-first expense splitting app built as a static SPA. It tracks
 - Rupee-first money display across the app
 - Device accounts with separate saved ledgers
 - Equal and custom splits
+- Percent and share-based split modes
+- Expense editing, duplication, merchant fields, tags, statuses, payment methods, and receipt attachments
+- Ledger filters for search, category, status, month, and sort order
+- Budget runway tracking by group
+- Recurring expense forecasting and one-click posting
+- Insight cards for averages, largest spend, top payer, and open items
 - Optimized settlement suggestions
 - One-click settlement recording
+- Shareable settlement plan copy/share flow
+- JSON import/export and CSV export
 - LocalStorage persistence
-- Exportable JSON ledger
 - Responsive dashboard UI
 - No build step and no runtime backend
 

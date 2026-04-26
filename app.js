@@ -110,32 +110,48 @@
       "applySettlementButton",
       "authGate",
       "authMessage",
+      "activeGroupMemberList",
       "balanceCanvas",
+      "budgetList",
+      "cancelEditButton",
       "categoryBars",
+      "categoryFilter",
       "countMetric",
+      "csvButton",
       "currencySelect",
       "customSplits",
       "expenseForm",
       "expenseGroupSelect",
       "expenseList",
       "expenseMessage",
+      "expenseSubmitLabel",
       "exportButton",
       "focusExpenseButton",
       "focusMemberButton",
+      "groupSettingsForm",
       "groupForm",
       "groupList",
       "groupMemberList",
+      "importButton",
+      "importFileInput",
+      "insightGrid",
       "memberForm",
+      "monthFilter",
       "netMetric",
       "oweMetric",
       "owedMetric",
       "participantList",
       "payerSelect",
       "personList",
+      "postRecurringButton",
+      "recurringList",
       "resetButton",
       "searchInput",
+      "shareSettlementButton",
       "signInForm",
-      "signUpForm"
+      "signUpForm",
+      "sortSelect",
+      "statusFilter"
     ].forEach((id) => {
       elements[id] = document.getElementById(id);
     });
@@ -149,6 +165,7 @@
     elements.expenseForm.addEventListener("submit", handleExpenseSubmit);
     elements.memberForm.addEventListener("submit", handleMemberSubmit);
     elements.groupForm.addEventListener("submit", handleGroupSubmit);
+    elements.groupSettingsForm.addEventListener("submit", handleGroupSettingsSubmit);
     elements.signInForm.addEventListener("submit", handleSignIn);
     elements.signUpForm.addEventListener("submit", handleSignUp);
     document.querySelectorAll('input[name="authMode"]').forEach((input) => {
@@ -161,9 +178,19 @@
       render();
     });
     elements.searchInput.addEventListener("input", renderExpenses);
+    elements.categoryFilter.addEventListener("change", renderExpenses);
+    elements.statusFilter.addEventListener("change", renderExpenses);
+    elements.monthFilter.addEventListener("change", renderExpenses);
+    elements.sortSelect.addEventListener("change", renderExpenses);
     elements.exportButton.addEventListener("click", exportState);
+    elements.csvButton.addEventListener("click", exportCsv);
+    elements.importButton.addEventListener("click", () => elements.importFileInput.click());
+    elements.importFileInput.addEventListener("change", importState);
     elements.resetButton.addEventListener("click", resetDemo);
     elements.applySettlementButton.addEventListener("click", applyNextSettlement);
+    elements.shareSettlementButton.addEventListener("click", shareSettlements);
+    elements.postRecurringButton.addEventListener("click", postDueRecurring);
+    elements.cancelEditButton.addEventListener("click", cancelExpenseEdit);
     elements.focusExpenseButton.addEventListener("click", () => focusFirstField(elements.expenseForm));
     elements.focusMemberButton.addEventListener("click", () => focusFirstField(elements.memberForm));
 
@@ -232,11 +259,30 @@
 
   function normalizeRupeeState(nextState) {
     nextState.currency = "INR";
+    nextState.members = Array.isArray(nextState.members) ? nextState.members : [];
+    nextState.groups = Array.isArray(nextState.groups) ? nextState.groups : [];
     nextState.expenses = (nextState.expenses || []).map((expense) => ({
+      status: "cleared",
+      paymentMethod: "upi",
+      merchant: "",
+      tags: [],
+      receipt: null,
+      recurring: { interval: "none", nextDate: "" },
       ...expense,
-      currency: "INR"
+      currency: "INR",
+      tags: normalizeTags(expense.tags),
+      recurring: normalizeRecurring(expense)
     }));
     return nextState;
+  }
+
+  function normalizeRecurring(expense) {
+    const recurring = expense.recurring || {};
+    const interval = recurring.interval || "none";
+    return {
+      interval,
+      nextDate: recurring.nextDate || (interval !== "none" ? nextRecurringDate(expense.paidAt, interval) : "")
+    };
   }
 
   function saveState() {
@@ -257,11 +303,16 @@
     renderGroups();
     renderSelectors();
     syncGroupMemberControls();
+    renderFilters();
     renderMetrics();
     renderExpenses();
     renderSettlements();
     renderPeople();
     renderCategoryBars();
+    renderBudgetList();
+    renderRecurringList();
+    renderInsights();
+    renderGroupSettings();
     refreshIcons();
   }
 
@@ -396,6 +447,10 @@
       .map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.name)}</option>`)
       .join("");
 
+    if (!elements.expenseForm.elements.namedItem("paidAt").value) {
+      elements.expenseForm.elements.namedItem("paidAt").value = todayIso();
+    }
+
     renderGroupMemberList();
   }
 
@@ -440,23 +495,26 @@
     const splitType = getFormValue(elements.expenseForm, "splitType");
     const participantIds = checkedValues(elements.expenseForm, "participants");
     const amount = Number(elements.expenseForm.elements.namedItem("amount").value || 0);
-    const isCustom = splitType === "custom";
+    const isAdvanced = ["custom", "percent", "shares"].includes(splitType);
 
-    elements.customSplits.hidden = !isCustom;
-    if (!isCustom) {
+    elements.customSplits.hidden = !isAdvanced;
+    if (!isAdvanced) {
       elements.customSplits.innerHTML = "";
       return;
     }
 
     const existingValues = new FormData(elements.expenseForm);
     const equalAmount = participantIds.length ? Ledger.roundMoney(amount / participantIds.length) : 0;
+    const equalPercent = participantIds.length ? Ledger.roundMoney(100 / participantIds.length) : 0;
     elements.customSplits.innerHTML = participantIds
       .map((memberId) => {
         const member = memberById(memberId);
-        const current = existingValues.get(`custom-${memberId}`) || equalAmount || "";
+        const fallback = splitType === "percent" ? equalPercent : splitType === "shares" ? 1 : equalAmount;
+        const label = splitType === "percent" ? "%" : splitType === "shares" ? "shares" : "Rs";
+        const current = existingValues.get(`custom-${memberId}`) || fallback || "";
         return `
           <label class="custom-split-row">
-            <span>${escapeHtml(member?.name || "Unknown")}</span>
+            <span>${escapeHtml(member?.name || "Unknown")} <small>${escapeHtml(label)}</small></span>
             <input name="custom-${escapeHtml(memberId)}" inputmode="decimal" type="number" min="0" step="0.01" value="${escapeHtml(current)}">
           </label>
         `;
@@ -478,16 +536,50 @@
     elements.activeScopeLabel.textContent = activeGroupName();
   }
 
+  function renderFilters() {
+    const currentCategory = elements.categoryFilter.value || "all";
+    const currentMonth = elements.monthFilter.value || "all";
+    const standardCategories = ["food", "stay", "travel", "home", "work", "fun", "health", "shopping", "settlement"];
+    const categories = Array.from(new Set([...standardCategories, ...state.expenses.map((expense) => expense.category || "other")]));
+    elements.categoryFilter.innerHTML = [
+      `<option value="all">All categories</option>`,
+      ...categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(titleCase(category))}</option>`)
+    ].join("");
+    elements.categoryFilter.value = categories.includes(currentCategory) ? currentCategory : "all";
+
+    const months = Array.from(new Set(state.expenses.map((expense) => monthKey(expense.paidAt)).filter(Boolean))).sort().reverse();
+    elements.monthFilter.innerHTML = [
+      `<option value="all">All months</option>`,
+      ...months.map((month) => `<option value="${escapeHtml(month)}">${escapeHtml(formatMonth(month))}</option>`)
+    ].join("");
+    elements.monthFilter.value = months.includes(currentMonth) ? currentMonth : "all";
+  }
+
   function renderExpenses() {
     const query = elements.searchInput.value.trim().toLowerCase();
+    const category = elements.categoryFilter.value;
+    const status = elements.statusFilter.value;
+    const month = elements.monthFilter.value;
+    const sort = elements.sortSelect.value;
     const expenses = getScopedExpenses(state.activeGroupId)
       .filter((expense) => {
-        const haystack = [expense.title, expense.category, expense.note, memberById(expense.payerId)?.name]
+        const haystack = [
+          expense.title,
+          expense.category,
+          expense.note,
+          expense.merchant,
+          (expense.tags || []).join(" "),
+          memberById(expense.payerId)?.name
+        ]
           .join(" ")
           .toLowerCase();
-        return !query || haystack.includes(query);
+        const matchesQuery = !query || haystack.includes(query);
+        const matchesCategory = category === "all" || expense.category === category;
+        const matchesStatus = status === "all" || (expense.status || "cleared") === status;
+        const matchesMonth = month === "all" || monthKey(expense.paidAt) === month;
+        return matchesQuery && matchesCategory && matchesStatus && matchesMonth;
       })
-      .sort((a, b) => new Date(b.paidAt) - new Date(a.paidAt));
+      .sort((a, b) => sortExpenses(a, b, sort));
 
     if (!expenses.length) {
       elements.expenseList.innerHTML = `<div class="empty-state">No expenses match this view.</div>`;
@@ -498,22 +590,33 @@
       .map((expense) => {
         const payer = memberById(expense.payerId);
         const group = groupById(expense.groupId);
+        const receipt = expense.receipt ? `<a class="receipt-link" href="${escapeHtml(expense.receipt.dataUrl)}" target="_blank" rel="noreferrer">Receipt</a>` : "";
+        const tags = (expense.tags || []).map((tag) => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join("");
         return `
           <article class="expense-card">
             <div class="expense-main">
               <div class="expense-title-row">
                 <strong>${escapeHtml(expense.title)}</strong>
                 <span class="category-tag">${escapeHtml(expense.category)}</span>
+                <span class="status-tag ${escapeHtml(expense.status || "cleared")}">${escapeHtml(titleCase(expense.status || "cleared"))}</span>
               </div>
               <div class="expense-meta">
                 Paid by ${escapeHtml(payer?.name || "Unknown")} in ${escapeHtml(group?.name || "Group")}
                 on ${escapeHtml(formatDate(expense.paidAt))}. Split ${escapeHtml(expense.split?.type || "equal")}.
+                ${expense.merchant ? `Merchant: ${escapeHtml(expense.merchant)}.` : ""}
+                ${expense.paymentMethod ? `Via ${escapeHtml(titleCase(expense.paymentMethod))}.` : ""}
               </div>
               ${expense.note ? `<p class="expense-note">${escapeHtml(expense.note)}</p>` : ""}
+              ${tags ? `<div class="tag-list">${tags}</div>` : ""}
             </div>
             <div class="expense-amount">
               <strong>${formatMoney(expense.amount, expense.currency)}</strong>
-              <button class="delete-button" type="button" data-delete-expense="${escapeHtml(expense.id)}">Delete</button>
+              ${receipt}
+              <div class="expense-actions">
+                <button class="delete-button" type="button" data-edit-expense="${escapeHtml(expense.id)}">Edit</button>
+                <button class="delete-button" type="button" data-duplicate-expense="${escapeHtml(expense.id)}">Copy</button>
+                <button class="delete-button" type="button" data-delete-expense="${escapeHtml(expense.id)}">Delete</button>
+              </div>
             </div>
           </article>
         `;
@@ -526,6 +629,12 @@
         saveState();
         render();
       });
+    });
+    elements.expenseList.querySelectorAll("[data-edit-expense]").forEach((button) => {
+      button.addEventListener("click", () => startExpenseEdit(button.dataset.editExpense));
+    });
+    elements.expenseList.querySelectorAll("[data-duplicate-expense]").forEach((button) => {
+      button.addEventListener("click", () => duplicateExpense(button.dataset.duplicateExpense));
     });
   }
 
@@ -594,6 +703,128 @@
             <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
             <strong>${formatMoney(value)}</strong>
           </div>
+        `;
+      })
+      .join("");
+  }
+
+  function renderBudgetList() {
+    if (!state.groups.length) {
+      elements.budgetList.innerHTML = `<div class="empty-state">Create a group to track budgets.</div>`;
+      return;
+    }
+
+    elements.budgetList.innerHTML = state.groups
+      .map((group) => {
+        const spent = getScopedExpenses(group.id).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+        const budget = Number(group.budget || 0);
+        const percent = budget > 0 ? Math.min(160, spent / budget * 100) : 0;
+        const remaining = Math.max(0, budget - spent);
+        const alert = budget > 0 && spent > budget ? "over" : budget > 0 && percent > 80 ? "watch" : "ok";
+        return `
+          <div class="budget-row ${alert}">
+            <div>
+              <strong>${escapeHtml(group.name)}</strong>
+              <small>${budget > 0 ? `${formatMoney(remaining)} left` : "No budget set"}</small>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width: ${Math.min(percent, 100)}%"></div></div>
+            <strong>${formatMoney(spent)}</strong>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function renderRecurringList() {
+    const recurring = state.expenses
+      .filter((expense) => expense.recurring && expense.recurring.interval !== "none")
+      .sort((a, b) => new Date(a.recurring.nextDate || a.paidAt) - new Date(b.recurring.nextDate || b.paidAt));
+
+    if (!recurring.length) {
+      elements.recurringList.innerHTML = `<div class="empty-state">Set an expense to repeat and it will appear here.</div>`;
+      elements.postRecurringButton.disabled = true;
+      return;
+    }
+
+    const today = todayIso();
+    elements.postRecurringButton.disabled = !recurring.some((expense) => expense.recurring.nextDate <= today);
+    elements.recurringList.innerHTML = recurring
+      .map((expense) => {
+        const due = expense.recurring.nextDate <= today ? "Due now" : formatDate(expense.recurring.nextDate);
+        return `
+          <div class="mini-row">
+            <span class="metric-icon neutral"><i data-lucide="repeat-2"></i></span>
+            <span>
+              <strong>${escapeHtml(expense.title)}</strong>
+              <small>${escapeHtml(titleCase(expense.recurring.interval))} - ${escapeHtml(due)}</small>
+            </span>
+            <strong>${formatMoney(expense.amount)}</strong>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function renderInsights() {
+    const scopedExpenses = getScopedExpenses(state.activeGroupId);
+    const total = scopedExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+    const largest = scopedExpenses.reduce((winner, expense) => {
+      return !winner || Number(expense.amount || 0) > Number(winner.amount || 0) ? expense : winner;
+    }, null);
+    const payerTotals = {};
+    scopedExpenses.forEach((expense) => {
+      payerTotals[expense.payerId] = (payerTotals[expense.payerId] || 0) + Number(expense.amount || 0);
+    });
+    const topPayerId = Object.entries(payerTotals).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const pending = scopedExpenses.filter((expense) => (expense.status || "cleared") !== "cleared");
+    const avg = scopedExpenses.length ? total / scopedExpenses.length : 0;
+
+    const insights = [
+      { label: "Average", value: formatMoney(avg), icon: "gauge" },
+      { label: "Largest", value: largest ? formatMoney(largest.amount) : "Rs 0", icon: "trending-up", sub: largest?.title },
+      { label: "Top payer", value: topPayerId ? memberById(topPayerId)?.name || "Unknown" : "None", icon: "crown" },
+      { label: "Open items", value: String(pending.length), icon: "alarm-clock" }
+    ];
+
+    elements.insightGrid.innerHTML = insights
+      .map((insight) => {
+        return `
+          <div class="insight-card">
+            <span class="metric-icon warm"><i data-lucide="${escapeHtml(insight.icon)}"></i></span>
+            <span>${escapeHtml(insight.label)}</span>
+            <strong>${escapeHtml(insight.value)}</strong>
+            ${insight.sub ? `<small>${escapeHtml(insight.sub)}</small>` : ""}
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function renderGroupSettings() {
+    const group = state.activeGroupId === "all" ? state.groups[0] : groupById(state.activeGroupId);
+    const form = elements.groupSettingsForm;
+    if (!group) {
+      form.elements.namedItem("name").value = "";
+      form.elements.namedItem("budget").value = "";
+      elements.activeGroupMemberList.innerHTML = `<div class="empty-state">Create a group first.</div>`;
+      return;
+    }
+
+    const nameInput = form.elements.namedItem("name");
+    const budgetInput = form.elements.namedItem("budget");
+    if (document.activeElement !== nameInput && document.activeElement !== budgetInput) {
+      form.elements.namedItem("name").value = group.name;
+      form.elements.namedItem("budget").value = group.budget || "";
+    }
+
+    elements.activeGroupMemberList.innerHTML = state.members
+      .map((member) => {
+        const checked = group.memberIds.includes(member.id) ? " checked" : "";
+        return `
+          <label class="check-pill">
+            <input type="checkbox" name="activeGroupMembers" value="${escapeHtml(member.id)}"${checked}>
+            <span>${escapeHtml(member.name)}</span>
+          </label>
         `;
       })
       .join("");
@@ -678,13 +909,14 @@
     render();
   }
 
-  function handleExpenseSubmit(event) {
+  async function handleExpenseSubmit(event) {
     event.preventDefault();
     if (!requireAccount()) {
       return;
     }
     const form = event.currentTarget;
     const data = new FormData(form);
+    const editingExpenseId = String(data.get("editingExpenseId") || "");
     const amount = Ledger.roundMoney(data.get("amount"));
     const participants = checkedValues(form, "participants");
     const splitType = data.get("splitType");
@@ -700,7 +932,7 @@
     }
 
     let split = { type: "equal" };
-    if (splitType === "custom") {
+    if (["custom", "percent", "shares"].includes(splitType)) {
       const values = {};
       let customTotal = 0;
       participants.forEach((memberId) => {
@@ -708,32 +940,61 @@
         values[memberId] = value;
         customTotal = Ledger.roundMoney(customTotal + value);
       });
-      if (Math.abs(customTotal - amount) > 0.009) {
+      if (splitType === "custom" && Math.abs(customTotal - amount) > 0.009) {
         setMessage(`Custom split must equal ${formatMoney(amount)}. Current total is ${formatMoney(customTotal)}.`);
         return;
       }
-      split = { type: "custom", values };
+      if (splitType === "percent" && Math.abs(customTotal - 100) > 0.009) {
+        setMessage(`Percent split must equal 100%. Current total is ${customTotal}%.`);
+        return;
+      }
+      if (splitType === "shares" && customTotal <= 0) {
+        setMessage("Share split needs at least one share.");
+        return;
+      }
+      split = { type: splitType, values };
     }
 
-    state.expenses.push({
-      id: createId("e"),
+    const existingExpense = editingExpenseId ? state.expenses.find((expense) => expense.id === editingExpenseId) : null;
+    const receiptFile = form.elements.namedItem("receipt").files[0];
+    const receipt = receiptFile ? await readReceipt(receiptFile) : existingExpense?.receipt || null;
+    const interval = data.get("recurringInterval") || "none";
+    const paidAt = data.get("paidAt") || todayIso();
+    const expense = {
+      id: editingExpenseId || createId("e"),
       title: String(data.get("title") || "").trim(),
       amount,
       currency: "INR",
       category: data.get("category"),
       groupId: data.get("groupId"),
       payerId: data.get("payerId"),
-      paidAt: new Date().toISOString().slice(0, 10),
+      paidAt,
+      merchant: String(data.get("merchant") || "").trim(),
+      paymentMethod: data.get("paymentMethod") || "upi",
+      status: data.get("status") || "cleared",
+      tags: normalizeTags(data.get("tags")),
       participants,
       split,
-      note: String(data.get("note") || "").trim()
-    });
+      note: String(data.get("note") || "").trim(),
+      receipt,
+      recurring: {
+        interval,
+        nextDate: interval === "none" ? "" : existingExpense?.recurring?.nextDate || nextRecurringDate(paidAt, interval)
+      }
+    };
+
+    if (editingExpenseId) {
+      state.expenses = state.expenses.map((item) => (item.id === editingExpenseId ? expense : item));
+    } else {
+      state.expenses.push(expense);
+    }
 
     form.reset();
+    cancelExpenseEdit(false);
     elements.currencySelect.value = "INR";
     saveState();
     syncGroupMemberControls();
-    setMessage("Expense saved.");
+    setMessage(editingExpenseId ? "Expense updated." : "Expense saved.");
     render();
   }
 
@@ -793,6 +1054,27 @@
     render();
   }
 
+  function handleGroupSettingsSubmit(event) {
+    event.preventDefault();
+    if (!requireAccount()) {
+      return;
+    }
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const group = state.activeGroupId === "all" ? state.groups[0] : groupById(state.activeGroupId);
+    const memberIds = checkedValues(form, "activeGroupMembers");
+    if (!group || !String(data.get("name") || "").trim() || !memberIds.length) {
+      return;
+    }
+
+    group.name = String(data.get("name") || "").trim();
+    group.code = initials(group.name);
+    group.budget = Number(data.get("budget") || 0);
+    group.memberIds = memberIds;
+    saveState();
+    render();
+  }
+
   function applyNextSettlement() {
     if (!requireAccount()) {
       return;
@@ -836,6 +1118,169 @@
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    if (!requireAccount()) {
+      return;
+    }
+    const rows = [
+      ["date", "group", "title", "merchant", "amount", "paid_by", "category", "status", "payment_method", "tags", "note"],
+      ...state.expenses.map((expense) => [
+        expense.paidAt,
+        groupById(expense.groupId)?.name || "",
+        expense.title,
+        expense.merchant || "",
+        expense.amount,
+        memberById(expense.payerId)?.name || "",
+        expense.category,
+        expense.status || "cleared",
+        expense.paymentMethod || "",
+        (expense.tags || []).join("|"),
+        expense.note || ""
+      ])
+    ];
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+    downloadBlob(csv, "novasplit-expenses.csv", "text/csv");
+  }
+
+  function importState(event) {
+    if (!requireAccount()) {
+      return;
+    }
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      try {
+        const imported = JSON.parse(String(reader.result || "{}"));
+        state = normalizeRupeeState({ ...structuredClone(defaultState), ...imported });
+        saveState();
+        render();
+        setMessage("Import complete.");
+      } catch (error) {
+        setMessage("Import failed. Choose a NovaSplit JSON export.");
+      } finally {
+        event.target.value = "";
+      }
+    });
+    reader.readAsText(file);
+  }
+
+  async function shareSettlements() {
+    if (!requireAccount()) {
+      return;
+    }
+    const settlements = currentSettlements();
+    const message = settlements.length
+      ? settlements.map((item) => `${item.fromName} pays ${item.toName}: ${formatMoney(item.amount)}`).join("\n")
+      : "Everyone is settled.";
+
+    if (navigator.share) {
+      await navigator.share({ title: "NovaSplit settlement plan", text: message });
+      return;
+    }
+    await navigator.clipboard?.writeText(message);
+    setSaveStatus("Plan copied");
+  }
+
+  function postDueRecurring() {
+    if (!requireAccount()) {
+      return;
+    }
+    const today = todayIso();
+    const due = state.expenses.filter((expense) => {
+      return expense.recurring && expense.recurring.interval !== "none" && expense.recurring.nextDate <= today;
+    });
+    due.forEach((expense) => {
+      const nextDate = expense.recurring.nextDate || today;
+      state.expenses.push({
+        ...structuredClone(expense),
+        id: createId("e"),
+        paidAt: nextDate,
+        title: `${expense.title} (${titleCase(expense.recurring.interval)})`,
+        receipt: null,
+        recurring: { interval: "none", nextDate: "" }
+      });
+      expense.recurring.nextDate = nextRecurringDate(nextDate, expense.recurring.interval);
+    });
+    saveState();
+    render();
+    setMessage(due.length ? `${due.length} recurring expense${due.length === 1 ? "" : "s"} posted.` : "No recurring expenses are due.");
+  }
+
+  function startExpenseEdit(expenseId) {
+    if (!requireAccount()) {
+      return;
+    }
+    const expense = state.expenses.find((item) => item.id === expenseId);
+    if (!expense) {
+      return;
+    }
+    const form = elements.expenseForm;
+    form.elements.namedItem("editingExpenseId").value = expense.id;
+    form.elements.namedItem("title").value = expense.title || "";
+    form.elements.namedItem("paidAt").value = expense.paidAt || todayIso();
+    form.elements.namedItem("merchant").value = expense.merchant || "";
+    form.elements.namedItem("amount").value = expense.amount || "";
+    form.elements.namedItem("status").value = expense.status || "cleared";
+    form.elements.namedItem("paymentMethod").value = expense.paymentMethod || "upi";
+    form.elements.namedItem("groupId").value = expense.groupId;
+    syncGroupMemberControls();
+    form.elements.namedItem("payerId").value = expense.payerId;
+    form.elements.namedItem("category").value = expense.category || "food";
+    form.elements.namedItem("tags").value = (expense.tags || []).join(", ");
+    form.elements.namedItem("note").value = expense.note || "";
+    form.elements.namedItem("recurringInterval").value = expense.recurring?.interval || "none";
+    form.querySelectorAll('input[name="participants"]').forEach((input) => {
+      input.checked = expense.participants.includes(input.value);
+    });
+    form.querySelector(`input[name="splitType"][value="${expense.split?.type || "equal"}"]`).checked = true;
+    syncCustomSplitControls();
+    if (expense.split?.values) {
+      Object.entries(expense.split.values).forEach(([memberId, value]) => {
+        const input = form.elements.namedItem(`custom-${memberId}`);
+        if (input) {
+          input.value = value;
+        }
+      });
+    }
+    elements.expenseSubmitLabel.textContent = "Update expense";
+    elements.cancelEditButton.hidden = false;
+    focusFirstField(form);
+  }
+
+  function cancelExpenseEdit(reset = true) {
+    const form = elements.expenseForm;
+    form.elements.namedItem("editingExpenseId").value = "";
+    elements.expenseSubmitLabel.textContent = "Save expense";
+    elements.cancelEditButton.hidden = true;
+    if (reset) {
+      form.reset();
+      elements.currencySelect.value = "INR";
+      form.elements.namedItem("paidAt").value = todayIso();
+      syncGroupMemberControls();
+    }
+  }
+
+  function duplicateExpense(expenseId) {
+    if (!requireAccount()) {
+      return;
+    }
+    const expense = state.expenses.find((item) => item.id === expenseId);
+    if (!expense) {
+      return;
+    }
+    state.expenses.push({
+      ...structuredClone(expense),
+      id: createId("e"),
+      title: `${expense.title} copy`,
+      paidAt: todayIso()
+    });
+    saveState();
+    render();
   }
 
   function resetDemo() {
@@ -1027,6 +1472,87 @@
 
   function hasLegacyState() {
     return Boolean(localStorage.getItem(storageKey));
+  }
+
+  function normalizeTags(value) {
+    if (Array.isArray(value)) {
+      return value.map((tag) => String(tag).trim()).filter(Boolean);
+    }
+    return String(value || "")
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  }
+
+  function nextRecurringDate(dateValue, interval) {
+    const date = new Date(`${dateValue || todayIso()}T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+      return todayIso();
+    }
+    if (interval === "weekly") {
+      date.setDate(date.getDate() + 7);
+    } else if (interval === "monthly") {
+      date.setMonth(date.getMonth() + 1);
+    } else if (interval === "quarterly") {
+      date.setMonth(date.getMonth() + 3);
+    }
+    return date.toISOString().slice(0, 10);
+  }
+
+  function todayIso() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function monthKey(value) {
+    return value ? String(value).slice(0, 7) : "";
+  }
+
+  function formatMonth(value) {
+    return new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(new Date(`${value}-01T00:00:00`));
+  }
+
+  function sortExpenses(a, b, sort) {
+    if (sort === "oldest") {
+      return new Date(a.paidAt) - new Date(b.paidAt);
+    }
+    if (sort === "amount-desc") {
+      return Number(b.amount || 0) - Number(a.amount || 0);
+    }
+    if (sort === "amount-asc") {
+      return Number(a.amount || 0) - Number(b.amount || 0);
+    }
+    return new Date(b.paidAt) - new Date(a.paidAt);
+  }
+
+  function readReceipt(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        resolve({
+          name: file.name,
+          type: file.type,
+          dataUrl: String(reader.result || "")
+        });
+      });
+      reader.addEventListener("error", reject);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function csvCell(value) {
+    return `"${String(value ?? "").replace(/"/g, '""')}"`;
+  }
+
+  function downloadBlob(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 
   function normalizeEmail(value) {

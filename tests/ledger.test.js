@@ -57,4 +57,16 @@ const categories = Ledger.categoryTotals({
 
 assert.deepEqual(categories, { food: 25.55 });
 
+assert.deepEqual(Ledger.splitShares({
+  amount: 100,
+  participants: ["a", "b", "c"],
+  split: { type: "percent", values: { a: 50, b: 25, c: 25 } }
+}), { a: 50, b: 25, c: 25 });
+
+assert.deepEqual(Ledger.splitShares({
+  amount: 100,
+  participants: ["a", "b", "c"],
+  split: { type: "shares", values: { a: 2, b: 1, c: 1 } }
+}), { a: 50, b: 25, c: 25 });
+
 console.log("ledger tests passed");

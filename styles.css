@@ -597,6 +597,13 @@ h2 {
   padding-left: 2.35rem;
 }
 
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0 1rem 1rem;
+}
+
 .expense-list {
   display: grid;
   gap: 0.72rem;
@@ -644,6 +651,26 @@ h2 {
   text-transform: uppercase;
 }
 
+.status-tag {
+  border-radius: 999px;
+  background: rgba(159, 194, 255, 0.11);
+  color: var(--steel);
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 0.2rem 0.48rem;
+  text-transform: uppercase;
+}
+
+.status-tag.pending {
+  background: rgba(247, 198, 90, 0.12);
+  color: var(--amber);
+}
+
+.status-tag.reimbursable {
+  background: rgba(168, 149, 255, 0.14);
+  color: var(--violet);
+}
+
 .expense-meta,
 .expense-note {
   color: var(--muted);
@@ -657,6 +684,24 @@ h2 {
 
 .expense-note {
   margin: 0.5rem 0 0;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.tag-chip,
+.receipt-link {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.18rem 0.48rem;
+  text-decoration: none;
 }
 
 .expense-amount {
@@ -682,6 +727,14 @@ h2 {
   color: var(--danger);
 }
 
+.expense-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
 .stack-form {
   display: grid;
   gap: 0.85rem;
@@ -698,9 +751,20 @@ h2 {
   gap: 0.7rem;
 }
 
+.form-actions,
+.inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.form-actions .primary-button {
+  flex: 1 1 auto;
+}
+
 .segmented-control {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -729,6 +793,10 @@ h2 {
 .segmented-control input:checked + span {
   background: rgba(69, 224, 191, 0.16);
   color: var(--mint);
+}
+
+.auth-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .participant-box {
@@ -791,6 +859,11 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.custom-split-row small {
+  color: var(--subtle);
+  font-weight: 800;
 }
 
 .form-message {
@@ -880,6 +953,13 @@ h2 {
   padding: 0 1rem 1rem;
 }
 
+.budget-list,
+.recurring-list {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0 1rem 1rem;
+}
+
 .bar-row {
   display: grid;
   grid-template-columns: 7.5rem minmax(0, 1fr) auto;
@@ -908,6 +988,78 @@ h2 {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--mint), var(--amber), var(--coral));
+}
+
+.budget-row,
+.mini-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 0.6fr) auto;
+  gap: 0.7rem;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.7rem;
+}
+
+.mini-row {
+  grid-template-columns: 2.2rem minmax(0, 1fr) auto;
+}
+
+.budget-row strong,
+.budget-row small,
+.mini-row strong,
+.mini-row small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-row small,
+.mini-row small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-top: 0.12rem;
+}
+
+.budget-row.watch {
+  border-color: rgba(247, 198, 90, 0.38);
+}
+
+.budget-row.over {
+  border-color: rgba(255, 111, 97, 0.5);
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  padding: 0 1rem 1rem;
+}
+
+.insight-card {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0.7rem;
+}
+
+.insight-card span:not(.metric-icon),
+.insight-card small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.insight-card strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .empty-state {
@@ -983,9 +1135,13 @@ h2 {
   .panel-heading,
   .expense-card,
   .form-row,
+  .filter-grid,
   .participant-list,
   .participant-list.compact,
-  .bar-row {
+  .bar-row,
+  .budget-row,
+  .mini-row,
+  .insight-grid {
     grid-template-columns: 1fr;
   }
 
@@ -999,6 +1155,10 @@ h2 {
 
   .expense-amount {
     text-align: left;
+  }
+
+  .expense-actions {
+    justify-content: flex-start;
   }
 
   .custom-split-row {

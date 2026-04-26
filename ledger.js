@@ -25,18 +25,47 @@
       }, {});
     }
 
+    if (split.type === "percent") {
+      return distributeShares(
+        participants,
+        participants.map((memberId) => amount * (Number(split.values && split.values[memberId]) || 0) / 100),
+        amount
+      );
+    }
+
+    if (split.type === "shares") {
+      const weights = participants.map((memberId) => Number(split.values && split.values[memberId]) || 0);
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      if (totalWeight > 0) {
+        return distributeShares(
+          participants,
+          weights.map((weight) => amount * weight / totalWeight),
+          amount
+        );
+      }
+    }
+
     if (!participants.length) {
       return {};
     }
 
-    const base = Math.floor((amount / participants.length) * 100) / 100;
-    let remainder = roundMoney(amount - base * participants.length);
-    return participants.reduce((shares, memberId) => {
-      const extra = remainder > 0 ? 0.01 : 0;
-      shares[memberId] = roundMoney(base + extra);
-      remainder = roundMoney(remainder - extra);
+    return distributeShares(participants, participants.map(() => amount / participants.length), amount);
+  }
+
+  function distributeShares(participants, rawValues, amount) {
+    const shares = {};
+    if (!participants.length) {
       return shares;
-    }, {});
+    }
+
+    const floored = rawValues.map((value) => Math.floor((Number(value) || 0) * 100) / 100);
+    let remainder = roundMoney(amount - floored.reduce((sum, value) => sum + value, 0));
+    participants.forEach((memberId, index) => {
+      const extra = remainder > 0 ? 0.01 : 0;
+      shares[memberId] = roundMoney(floored[index] + extra);
+      remainder = roundMoney(remainder - extra);
+    });
+    return shares;
   }
 
   function calculateBalances(state, groupId) {
