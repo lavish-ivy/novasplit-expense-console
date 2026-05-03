@@ -147,6 +147,7 @@
       "recurringList",
       "resetButton",
       "searchInput",
+      "settlementList",
       "shareSettlementButton",
       "signInForm",
       "signUpForm",
