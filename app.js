@@ -146,6 +146,7 @@
       "postRecurringButton",
       "recurringList",
       "resetButton",
+      "resetLocalAccountsButton",
       "searchInput",
       "settlementList",
       "shareSettlementButton",
@@ -188,6 +189,7 @@
     elements.importButton.addEventListener("click", () => elements.importFileInput.click());
     elements.importFileInput.addEventListener("change", importState);
     elements.resetButton.addEventListener("click", resetDemo);
+    elements.resetLocalAccountsButton.addEventListener("click", resetLocalAccounts);
     elements.applySettlementButton.addEventListener("click", applyNextSettlement);
     elements.shareSettlementButton.addEventListener("click", shareSettlements);
     elements.postRecurringButton.addEventListener("click", postDueRecurring);
@@ -1291,6 +1293,17 @@
     state = personalizeState(structuredClone(defaultState), currentUser);
     saveState();
     render();
+  }
+
+  function resetLocalAccounts() {
+    accountStore = { users: [], ledgers: {} };
+    currentUser = null;
+    state = normalizeRupeeState(structuredClone(defaultState));
+    localStorage.removeItem(accountStoreKey);
+    localStorage.removeItem(sessionKey);
+    localStorage.removeItem(storageKey);
+    render();
+    setAuthMessage("Local accounts reset. You can create a fresh account now.");
   }
 
   function startCanvasLoop() {
